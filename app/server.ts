@@ -214,6 +214,12 @@ router.get('/users', (req: Request, res: Response) => {
         */
 });
 
+// Search "algo"
+function searchItems(searchTerm: string, items: PtItem[]): PtItem[] {
+  const searchResults = items.filter(i => i.title && i.title.toLowerCase().indexOf(searchTerm.toLowerCase()) >= 0);
+  return searchResults;
+}
+
 router.get('/summaries', (req: Request, res: Response) => {
   const ret = currentPtItems.map((i) => {
     return {
@@ -232,14 +238,51 @@ router.get('/summaries', (req: Request, res: Response) => {
   res.json(ret);
 });
 
+router.get('/search', (req: Request, res: Response) => {
+  const searchTerm = req.query.term as string;
+  const searchResults = searchItems(searchTerm, currentPtItems);
+  res.json(searchResults);
+});
+
 router.get('/backlog', (req: Request, res: Response) => {
   res.json(currentPtItems);
 });
 
+router.get('/backlog/:preset', (req: Request, res: Response) => {
+  const preset = req.params.preset;
+  const searchTerm = req.query.search as string;
+
+  let filteredItems = currentPtItems;
+
+  if (preset === 'open') {
+    filteredItems = currentPtItems.filter(
+      (i) =>
+        (i.status === 'Open' || i.status === 'ReOpened') &&
+        i.dateDeleted === undefined
+    );
+  } else if (preset === 'closed') {
+    filteredItems = currentPtItems.filter(
+      (i) => i.status === 'Closed' && i.dateDeleted === undefined
+    );
+  }
+
+  if (searchTerm && searchTerm.length > 0) {
+    const searchResults = searchItems(searchTerm, filteredItems);
+    res.json(searchResults);
+  } else {
+    res.json(filteredItems);
+  }
+
+});
+
 router.get('/myItems', (req: Request, res: Response) => {
   let userId: number;
+  let searchTerm: string = '';
   if (req.query && req.query.userId) {
     userId = parseInt(req.query.userId as string, undefined);
+  }
+  if (req.query && req.query.search) {
+    searchTerm = req.query.search as string;
   }
   let found = false;
 
@@ -247,31 +290,25 @@ router.get('/myItems', (req: Request, res: Response) => {
     found = true;
   }
 
-  const filteredItems = currentPtItems.filter(
+  let filteredItems = currentPtItems.filter(
     (i) => i.assignee.id === userId && i.dateDeleted === undefined
   );
 
   if (!found) {
     res.status(404);
   }
-  res.json(filteredItems);
+
+  console.log('searching for ' + searchTerm);
+  if (searchTerm && searchTerm.length > 0) {
+    const searchResults = searchItems(searchTerm, filteredItems);
+    console.log(searchResults.map(i=>i.title));
+    res.json(searchResults);
+  } else {
+    res.json(filteredItems);
+  }
+
 });
 
-router.get('/openItems', (req: Request, res: Response) => {
-  const filteredItems = currentPtItems.filter(
-    (i) =>
-      (i.status === 'Open' || i.status === 'ReOpened') &&
-      i.dateDeleted === undefined
-  );
-  res.json(filteredItems);
-});
-
-router.get('/closedItems', (req: Request, res: Response) => {
-  const filteredItems = currentPtItems.filter(
-    (i) => i.status === 'Closed' && i.dateDeleted === undefined
-  );
-  res.json(filteredItems);
-});
 
 router.get('/item/:id', (req: Request, res: Response) => {
   const itemId = parseInt(req.params.id, undefined);
