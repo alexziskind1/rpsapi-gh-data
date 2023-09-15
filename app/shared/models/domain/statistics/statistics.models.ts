@@ -1,4 +1,4 @@
-import { PtItem } from '../';
+import { PtItem } from "../pt-item.model";
 
 export interface ItemsForMonth {
     closed: PtItem[];

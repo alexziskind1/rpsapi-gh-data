@@ -1,4 +1,4 @@
-import { PtObjectBase } from './';
+import { PtObjectBase } from "./index";
 
 export interface PtTask extends PtObjectBase {
     completed: boolean;

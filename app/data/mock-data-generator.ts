@@ -6,15 +6,16 @@ import * as faker from 'faker';
 import * as _ from 'lodash';
 
 // app imports
-import { PtUserAuthInfo, PtUserWithAuth } from '../shared/models';
-import {
-    PtComment,
-    PtItem,
-    PtTask
-} from '../shared/models/domain';
-import { ItemTypeEnum, PriorityEnum, StatusEnum } from '../shared/models/domain/enums';
-import { PtItemType } from '../shared/models/domain/types';
+
 import { toTitleCase } from '../util/string-utils';
+import { PriorityEnum } from '../shared/models/domain/enums/item-priority.enum';
+import { StatusEnum } from '../shared/models/domain/enums/item-status.enum';
+import { ItemTypeEnum } from '../shared/models/domain/enums/item-type-enum';
+import { PtItem } from '../shared/models/domain/index';
+import { PtComment } from '../shared/models/domain/pt-comment.model';
+import { PtTask } from '../shared/models/domain/pt-task.model';
+import { PtUserAuthInfo } from '../shared/models/pt-user-auth-info';
+import { PtUserWithAuth } from '../shared/models/pt-user-with-auth';
 
 const NUM_PT_ITEMS = 200;
 const NUM_USERS = 20;

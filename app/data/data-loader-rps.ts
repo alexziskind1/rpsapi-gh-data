@@ -1,6 +1,8 @@
-import { PtComment, PtItem, PtUser } from '../shared/models/domain';
+
 import { getRandomDateBetween, getRandomDateWithinLastYear } from './utils/data-utils';
 import { loadJsonFromFileName } from '../util/json-utils';
+import { PtItem } from '../shared/models/domain/index';
+import { PtUser } from '../shared/models/domain/pt-user.model';
 
 const usersFileName = 'fs-users.json';
 const itemsFileName = 'fs-items.json';

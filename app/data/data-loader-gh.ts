@@ -1,7 +1,5 @@
-import { PtItem, PtUser } from '../shared/models/domain';
 import { GithubIssue } from './models';
-import { getNextId, getRandomPriority, getRandomPtItemType, getRandomUser } from './utils/data-utils';
-import { loadJsonFromFileName, writeJsonToFileLoc } from '../util/json-utils';
+import { loadJsonFromFileName } from '../util/json-utils';
 
 const origDataFileName = 'datasets-issues-with-comments.json';
 

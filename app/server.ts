@@ -1,6 +1,7 @@
 import * as bodyParser from 'body-parser';
 import * as fs from 'fs';
 import * as http from 'http';
+import 'dotenv/config';
 
 import express from 'express';
 import { Express, Request, Response, Router } from 'express';
@@ -20,23 +21,25 @@ const allItems = dataLoaderRps.loadItems();
 
 
 // import { PtUserWithAuth } from './shared/models';
-import {
-  PtAuthToken,
-  PtComment,
-  PtItem,
-  PtLoginModel,
-  PtRegisterModel,
-  PtTask,
-  PtUser,
-} from './shared/models/domain';
-import {
-  FilteredIssues,
-  ItemsForMonth,
-} from './shared/models/domain/statistics';
+
 import { newGuid } from './util/guid';
+import { wNearTextSearch } from './data/weaviate/query';
+import { WPtItem, wPtItemsToPtItems } from './data/weaviate/models';
+import { DBConnection } from './data/weaviate/database';
+import { PtComment, PtItem, PtTask } from './shared/models/domain/index';
+import { ItemsForMonth, FilteredIssues } from './shared/models/domain/statistics/statistics.models';
+
 
 const port = 8080;
 
+
+let weaviateDb: DBConnection;
+
+async function initDb() {
+   weaviateDb = await DBConnection.createInstanceAsync();
+}
+
+initDb();
 
 /*
 const usersPerPage = 20;
@@ -214,10 +217,20 @@ router.get('/users', (req: Request, res: Response) => {
         */
 });
 
-// Search "algo"
-function searchItems(searchTerm: string, items: PtItem[]): PtItem[] {
+async function titleSearch(searchTerm: string, items: PtItem[]): Promise<PtItem[]> {
   const searchResults = items.filter(i => i.title && i.title.toLowerCase().indexOf(searchTerm.toLowerCase()) >= 0);
   return searchResults;
+}
+
+async function weaviateSearch(searchTerm: string): Promise<PtItem[]> {
+  const res = await weaviateDb.queryPtItems(searchTerm);
+  return Promise.resolve(wPtItemsToPtItems(res.data.Get.PtItem, allUsers));
+}
+
+// Search "algo"
+async function searchItems(searchTerm: string, items: PtItem[]): Promise<PtItem[]> {
+  //return titleSearch(searchTerm, items);
+  return weaviateSearch(searchTerm);
 }
 
 router.get('/summaries', (req: Request, res: Response) => {
@@ -248,7 +261,7 @@ router.get('/backlog', (req: Request, res: Response) => {
   res.json(currentPtItems);
 });
 
-router.get('/backlog/:preset', (req: Request, res: Response) => {
+router.get('/backlog/:preset', async (req: Request, res: Response) => {
   const preset = req.params.preset;
   const searchTerm = req.query.search as string;
 
@@ -267,7 +280,7 @@ router.get('/backlog/:preset', (req: Request, res: Response) => {
   }
 
   if (searchTerm && searchTerm.length > 0) {
-    const searchResults = searchItems(searchTerm, filteredItems);
+    const searchResults = await searchItems(searchTerm, filteredItems);
     res.json(searchResults);
   } else {
     res.json(filteredItems);
@@ -275,7 +288,7 @@ router.get('/backlog/:preset', (req: Request, res: Response) => {
 
 });
 
-router.get('/myItems', (req: Request, res: Response) => {
+router.get('/myItems', async (req: Request, res: Response) => {
   let userId: number;
   let searchTerm: string = '';
   if (req.query && req.query.userId) {
@@ -298,10 +311,10 @@ router.get('/myItems', (req: Request, res: Response) => {
     res.status(404);
   }
 
-  console.log('searching for ' + searchTerm);
+  //console.log('searching for ' + searchTerm);
   if (searchTerm && searchTerm.length > 0) {
-    const searchResults = searchItems(searchTerm, filteredItems);
-    console.log(searchResults.map(i=>i.title));
+    const searchResults = await searchItems(searchTerm, filteredItems);
+    //console.log(searchResults.map(i=>i.title));
     res.json(searchResults);
   } else {
     res.json(filteredItems);
@@ -312,7 +325,7 @@ router.get('/myItems', (req: Request, res: Response) => {
 
 router.get('/item/:id', (req: Request, res: Response) => {
   const itemId = parseInt(req.params.id, undefined);
-  const foundItem = currentPtItems.find(
+  const foundItem: PtItem | undefined = currentPtItems.find(
     (i) => i.id === itemId && i.dateDeleted === undefined
   );
 
@@ -321,7 +334,7 @@ router.get('/item/:id', (req: Request, res: Response) => {
     found = true;
 
     const undeletedTasks = foundItem.tasks.filter(
-      (t) => t.dateDeleted === undefined
+      (t: PtTask) => t.dateDeleted === undefined
     );
     foundItem.tasks = undeletedTasks;
   }
@@ -467,7 +480,7 @@ router.put('/task/:id', (req: Request, res: Response) => {
       );
 
       if (foundItem) {
-        const updatedTasks = foundItem.tasks.map((t) => {
+        const updatedTasks = foundItem.tasks.map((t: PtTask) => {
           if (t.id === modifiedTask.id) {
             found = true;
             return modifiedTask;
@@ -516,7 +529,7 @@ router.post('/task/:itemId/:id', (req: Request, res: Response) => {
     if (foundItem) {
       let found = false;
 
-      const updatedTasks = foundItem.tasks.map((t) => {
+      const updatedTasks = foundItem.tasks.map((t: PtTask) => {
         if (t.id === taskId) {
           found = true;
           const deletedTask: PtTask = {
