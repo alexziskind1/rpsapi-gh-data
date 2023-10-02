@@ -22,9 +22,7 @@ const allItems = dataLoaderRps.loadItems();
 
 // import { PtUserWithAuth } from './shared/models';
 
-import { newGuid } from './util/guid';
-import { wNearTextSearch } from './data/weaviate/query';
-import { WPtItem, wPtItemsToPtItems } from './data/weaviate/models';
+import { wPtItemsToPtItems } from './data/weaviate/models';
 import { DBConnection } from './data/weaviate/database';
 import { PtComment, PtItem, PtTask } from './shared/models/domain/index';
 import { ItemsForMonth, FilteredIssues } from './shared/models/domain/statistics/statistics.models';
@@ -222,15 +220,27 @@ async function titleSearch(searchTerm: string, items: PtItem[]): Promise<PtItem[
   return searchResults;
 }
 
-async function weaviateSearch(searchTerm: string): Promise<PtItem[]> {
-  const res = await weaviateDb.queryPtItems(searchTerm);
+async function weaviateSearch(preset: string, searchTerm: string, userId: number | undefined): Promise<PtItem[]> {
+  let res: any;
+  if (preset && preset.length > 0) {
+    const filterPath = 'status';
+    const filterString = preset;
+    res = await weaviateDb.queryPtItemsFiltered(searchTerm, filterPath, filterString);
+  } else if (userId) {
+    const filterPath = 'assigneeId';
+    const filterNum = userId;
+    res = await weaviateDb.queryPtItemsFiltered(searchTerm, filterPath, undefined, filterNum);
+  } else {
+    res = await weaviateDb.queryPtItems(searchTerm);
+  }
+  
   return Promise.resolve(wPtItemsToPtItems(res.data.Get.PtItem, allUsers));
 }
 
 // Search "algo"
-async function searchItems(searchTerm: string, items: PtItem[]): Promise<PtItem[]> {
+async function searchItems(items: PtItem[], preset: string, searchTerm: string, userId: number | undefined): Promise<PtItem[]> {
   //return titleSearch(searchTerm, items);
-  return weaviateSearch(searchTerm);
+  return weaviateSearch(preset, searchTerm, userId);
 }
 
 router.get('/summaries', (req: Request, res: Response) => {
@@ -251,16 +261,54 @@ router.get('/summaries', (req: Request, res: Response) => {
   res.json(ret);
 });
 
+/*
 router.get('/search', (req: Request, res: Response) => {
   const searchTerm = req.query.term as string;
+  const preset = req.query.preset as string;
+  console.log('SEARCH TERM:' + searchTerm);
+  console.log('PRESET:' + preset);
   const searchResults = searchItems(searchTerm, currentPtItems);
   res.json(searchResults);
 });
+*/
 
-router.get('/backlog', (req: Request, res: Response) => {
-  res.json(currentPtItems);
+async function getFilteredItems(preset: string, items: PtItem[]): Promise<PtItem[]> {
+  let filteredItems = items;
+
+  if (preset === 'open') {
+    filteredItems = currentPtItems.filter(
+      (i) =>
+        (i.status === 'Open' || i.status === 'ReOpened') &&
+        i.dateDeleted === undefined
+    );
+  } else if (preset === 'closed') {
+    filteredItems = currentPtItems.filter(
+      (i) => i.status === 'Closed' && i.dateDeleted === undefined
+    );
+  }
+
+  return filteredItems;
+}
+
+router.get('/backlog', async (req: Request, res: Response) => {
+  //res.json(currentPtItems);
+  const searchTerm = req.query.search as string;
+  const preset = req.query.preset as string;
+  console.log('SEARCH TERM:' + searchTerm);
+  console.log('PRESET:' + preset);
+
+  const filteredItems = await getFilteredItems(preset, currentPtItems);
+
+  if (searchTerm && searchTerm.length > 0) {
+    const searchResults = await searchItems(filteredItems, preset, searchTerm, undefined);
+    res.json(searchResults);
+  } else {
+    res.json(filteredItems);
+  }
+
 });
 
+/*
 router.get('/backlog/:preset', async (req: Request, res: Response) => {
   const preset = req.params.preset;
   const searchTerm = req.query.search as string;
@@ -287,9 +335,10 @@ router.get('/backlog/:preset', async (req: Request, res: Response) => {
   }
 
 });
+*/
 
 router.get('/myItems', async (req: Request, res: Response) => {
-  let userId: number;
+  let userId: number | undefined = undefined;
   let searchTerm: string = '';
   if (req.query && req.query.userId) {
     userId = parseInt(req.query.userId as string, undefined);
@@ -297,6 +346,9 @@ router.get('/myItems', async (req: Request, res: Response) => {
   if (req.query && req.query.search) {
     searchTerm = req.query.search as string;
   }
+  console.log('SEARCH TERM:' + searchTerm);
+  console.log('PRESET:' + 'my');
+
   let found = false;
 
   if (currentPtUsers.findIndex((u) => u.id === userId) >= 0) {
@@ -313,7 +365,7 @@ router.get('/myItems', async (req: Request, res: Response) => {
 
   //console.log('searching for ' + searchTerm);
   if (searchTerm && searchTerm.length > 0) {
-    const searchResults = await searchItems(searchTerm, filteredItems);
+    const searchResults = await searchItems(filteredItems, '', searchTerm, userId);
     //console.log(searchResults.map(i=>i.title));
     res.json(searchResults);
   } else {

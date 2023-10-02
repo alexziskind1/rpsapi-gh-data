@@ -1,10 +1,10 @@
 
-import { WeaviateClient, Property } from '../../../node_modules/weaviate-ts-client/dist/index';
+import { WeaviateClient, Property, WhereFilter } from '../../../node_modules/weaviate-ts-client/dist/index';
 import { PtItem } from '../../shared/models/domain/pt-item.model';
 import { createNewClient } from './client';
 
 import { RpsDataClassName, WPtItem, rpsPtItemProps } from './models';
-import { WResponseTypeCount, wNearTextSearch } from './query';
+import { WResponseTypeCount, wNearTextSearch, wNearTextSearchFiltered } from './query';
 
 
 export class DBConnection {
@@ -186,6 +186,30 @@ export class DBConnection {
     async queryPtItems(searchTerm: string) {
         const fields = rpsPtItemProps.map(p => p.name).join(' ');
         return wNearTextSearch<WPtItem>(this.client, RpsDataClassName.PtItem, fields, searchTerm);
+    }
+
+    async queryPtItemsFiltered(searchTerm: string, filterPath: string, filterString?: string, filterNumber?: number) {
+        const fields = rpsPtItemProps.map(p => p.name).join(' ');
+        let filter: WhereFilter | undefined = undefined;
+        if (filterString != null && filterString != undefined && filterString != '') {
+            filter = {
+                path: [filterPath],
+                operator: 'Equal',
+                valueString: filterString
+            };
+        } else if (filterNumber != null && filterNumber != undefined) {
+            filter = {
+                path: [filterPath],
+                operator: 'Equal',
+                valueInt: filterNumber
+            };
+        }
+
+        if (filter == null || filter == undefined) {
+            return wNearTextSearch<WPtItem>(this.client, RpsDataClassName.PtItem, fields, searchTerm);
+        } else {
+            return wNearTextSearchFiltered<WPtItem>(this.client, RpsDataClassName.PtItem, fields, filter, searchTerm);
+        }
     }
 
 }
